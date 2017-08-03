@@ -2,19 +2,23 @@ package com.bulingzhuang.quicktipssearchview
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.Resources
 import android.graphics.*
+import android.graphics.drawable.BitmapDrawable
 import android.os.Build
+import android.support.v4.content.ContextCompat
 import android.util.AttributeSet
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
+import android.widget.Toast
 
 /**
  * Created by bulingzhuang
  * on 2017/7/31
  * E-mail:bulingzhuang@foxmail.com
  */
-class QuickTipsSearchView : View {
+class RainbowQuickTipsView : View {
 
     //是否使用缓存
     private var mUseCache: Boolean = false
@@ -24,6 +28,10 @@ class QuickTipsSearchView : View {
     private lateinit var mCacheBitmap: Bitmap
     //缓存用画笔
     private val mCachePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    //删除画笔
+    private val mDelPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    //删除叉号画笔
+    private val mDelClosePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     //背景画笔
     private val mBgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     //背景矩形
@@ -65,6 +73,9 @@ class QuickTipsSearchView : View {
         mPaddingY = mDensity * 8
         mPaddingX = mDensity * 12
         mTextBgRadius = mDensity * 6 * 0.7f
+        mDelPaint.color = Color.parseColor("#EA0C25")
+        mDelClosePaint.color = Color.WHITE
+        mDelClosePaint.strokeWidth = mDensity * 3
         mTextPaint.textSize = mDensity * 14
         mTextPaint.color = Color.WHITE
         val fontMetrics = mTextPaint.fontMetrics
@@ -94,13 +105,36 @@ class QuickTipsSearchView : View {
     override fun onDraw(canvas: Canvas?) {
         super.onDraw(canvas)
         if (mUseCache) {//使用缓存数据，绘制单条删除状态
-            Log.e("blz", "使用缓存绘制")
             canvas?.drawBitmap(mCacheBitmap, 0f, 0f, mCachePaint)
+            if (mCheckTipsEntity != null && mDownX - mMoveX > 1) {
+//                val width = Math.max(mMoveX, mCheckTipsEntity!!.width)
+                val width = Math.min(mDownX - mMoveX, mCheckTipsEntity!!.right - mCheckTipsEntity!!.left)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    canvas?.drawRoundRect(mCheckTipsEntity!!.right - width, mCheckTipsEntity!!.top, mCheckTipsEntity!!.right, mCheckTipsEntity!!.bottom, mTextBgRadius, mTextBgRadius, mDelPaint)
+                } else {
+                    mTextBgRectF.set(mCheckTipsEntity!!.right - width, mCheckTipsEntity!!.top, mCheckTipsEntity!!.right, mCheckTipsEntity!!.bottom)
+                    canvas?.drawRoundRect(mTextBgRectF, mTextBgRadius, mTextBgRadius, mDelPaint)
+                }
+                if (width > mTextYOffset * 2.33) {
+                    //删除显示叉号
+                    val closeWidth = mCheckTipsEntity!!.right - mCheckTipsEntity!!.left - width
+                    canvas?.drawLine((width - mTextYOffset) / 2 + mCheckTipsEntity!!.left + closeWidth,
+                            (mCheckTipsEntity!!.bottom - mCheckTipsEntity!!.top - mTextYOffset) / 2 + mCheckTipsEntity!!.top,
+                            (width + mTextYOffset) / 2 + mCheckTipsEntity!!.left + closeWidth,
+                            (mCheckTipsEntity!!.bottom - mCheckTipsEntity!!.top + mTextYOffset) / 2 + mCheckTipsEntity!!.top,
+                            mDelClosePaint)
+                    canvas?.drawLine((width + mTextYOffset) / 2 + mCheckTipsEntity!!.left + closeWidth,
+                            (mCheckTipsEntity!!.bottom - mCheckTipsEntity!!.top - mTextYOffset) / 2 + mCheckTipsEntity!!.top,
+                            (width - mTextYOffset) / 2 + mCheckTipsEntity!!.left + closeWidth,
+                            (mCheckTipsEntity!!.bottom - mCheckTipsEntity!!.top + mTextYOffset) / 2 + mCheckTipsEntity!!.top,
+                            mDelClosePaint)
+                }
+            }
         } else {//初始化和数据改变以后，重新绘制缓存内容
             Log.e("blz", "绘制标签内容")
             mLastX = 0.0f
             mLastY = 0.0f
-
+            mCacheCanvas.drawColor(Color.TRANSPARENT,PorterDuff.Mode.CLEAR)
             //画文字
             mDataList.forEach {
                 val availableX = width - mLastX
@@ -138,8 +172,16 @@ class QuickTipsSearchView : View {
         mOnClickListener = listener
     }
 
+    //按下的时候记录的x、y值
     private var mDownX: Float = 0.0f
     private var mDownY: Float = 0.0f
+    private var mMoveX: Float = 0.0f
+    private var mMoveY: Float = 0.0f
+    //侧滑选中的条目
+    private var mCheckTipsEntity: TipsEntity? = null
+    //侧滑成功标记
+    private var mHasCheck: Boolean = false
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         if (event != null) {
@@ -149,29 +191,68 @@ class QuickTipsSearchView : View {
                 MotionEvent.ACTION_DOWN -> {
                     mDownX = x
                     mDownY = y
-
-                    Log.e("blz", "Touch状态：DOWN，x=$mDownX，y=$mDownY")
+                    mMoveX = x
+                    mMoveY = y
+                    Log.e("blz", "Touch状态：DOWN，x=$x，y=$y")
+//                    invalidate()
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    Log.e("blz", "Touch状态：MOVE，x=$mDownX，y=$mDownY")
-                }
-                MotionEvent.ACTION_HOVER_MOVE -> {
-                    Log.e("blz", "Touch状态：HOVER_MOVE，x=$mDownX，y=$mDownY")
-                }
-                MotionEvent.ACTION_UP -> {
-                    Log.e("blz", "Touch状态：UP，x=$mDownX，y=$mDownY")
-                    val absX = Math.abs(x - mDownX)
-                    val absY = Math.abs(y - mDownY)
-                    if (absX < 3 * mDensity && absY < 3 * mDensity) {
-                        Log.e("blz", "是点击事件，触发")
+                    mMoveX = x
+                    mMoveY = y
+                    Log.e("blz", "Touch状态：MOVE，x=$x，y=$y")
+                    if (mMoveX - mDownX < -17 * mDensity && mCheckTipsEntity == null) {
+                        Log.e("blz", "开始触发侧滑事件")
                         mDataList.filter { it.left <= mDownX && it.right >= mDownX && it.top <= mDownY && it.bottom >= mDownY }
                                 .forEach {
-                                    it.realContent?.let { it1 -> mOnClickListener?.onClick(it1) }
+                                    mCheckTipsEntity = it
                                 }
                     }
+                    invalidate()
                 }
-                else ->{
-                    Log.e("blz", "Touch状态：其他状态(${event.action})，x=$mDownX，y=$mDownY")
+                MotionEvent.ACTION_UP -> {
+                    Log.e("blz", "Touch状态：UP，x=$x，y=$y")
+
+                    val absX = Math.abs(x - mDownX)
+                    val absY = Math.abs(y - mDownY)
+                    if (absX < 7 * mDensity && absY < 7 * mDensity) {
+                        Log.e("blz", "触发点击事件")
+                        if (mHasCheck && mCheckTipsEntity != null) {
+                            if (mCheckTipsEntity!!.left <= mDownX && mCheckTipsEntity!!.right >= mDownX
+                                    && mCheckTipsEntity!!.top <= mDownY && mCheckTipsEntity!!.bottom >= mDownY) {
+                                mDataList.remove(mCheckTipsEntity!!)
+                                mUseCache = false
+//                                invalidate()
+                                Toast.makeText(context, "删除：${mCheckTipsEntity!!.realContent}", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            mDataList.filter { it.left <= mDownX && it.right >= mDownX && it.top <= mDownY && it.bottom >= mDownY }
+                                    .forEach {
+                                        it.realContent?.let { it1 -> mOnClickListener?.onClick(it1) }
+                                    }
+                        }
+                        mCheckTipsEntity = null
+                        mHasCheck = false
+                    } else if (mCheckTipsEntity != null) {
+                        if (mDownX - x >= (mCheckTipsEntity!!.right - mCheckTipsEntity!!.left) / 2) {
+                            //侧滑过半，触发侧滑成功状态
+                            mHasCheck = true
+                            mMoveX = mDownX - (mCheckTipsEntity!!.right - mCheckTipsEntity!!.left)
+//                            invalidate()
+                        } else if (mDownX - x < (mCheckTipsEntity!!.right - mCheckTipsEntity!!.left) / 2 && mDownX - x >= 0) {
+                            mMoveX = mDownX
+                            mMoveY = mDownY
+                            mCheckTipsEntity = null
+                            mHasCheck = false
+//                            invalidate()
+                        }
+                    } else {
+                        mCheckTipsEntity = null
+                        mHasCheck = false
+                    }
+                    invalidate()
+                }
+                else -> {
+                    Log.e("blz", "Touch状态：其他状态(${event.action})，x=$x，y=$y")
                 }
             }
         }
@@ -196,6 +277,10 @@ class QuickTipsSearchView : View {
             if (it.length > 6) {
                 val str = it.substring(0, 6) + "…"
                 mDataList.add(TipsEntity(str, it))
+            } else if (it.length == 1) {
+                mDataList.add(TipsEntity("    $it    ", it))
+            } else if (it.length == 2) {
+                mDataList.add(TipsEntity("  $it  ", it))
             } else {
                 mDataList.add(TipsEntity(it, it))
             }

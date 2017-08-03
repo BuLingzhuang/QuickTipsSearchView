@@ -7,7 +7,7 @@
     android:layout_height="match_parent"
     tools:context="com.bulingzhuang.quicktipssearchview.MainActivity">
 
-    <com.bulingzhuang.quicktipssearchview.QuickTipsSearchView
+    <com.bulingzhuang.quicktipssearchview.RainbowQuickTipsView
         android:id="@+id/qtv"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
